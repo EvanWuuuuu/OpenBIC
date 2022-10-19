@@ -53,6 +53,7 @@ PLATFORM_RELEASE_MAPPINGS = {
     "yv35-cl": "oby35-cl",
     "yv35-hd": "oby35-hd",
     "yv35-rf": "oby35-rf",
+    "sdy-cxlb": "obsdy-cxlb",
 }
 
 PLATFORM_DIRECTORIES = {
@@ -65,6 +66,7 @@ PLATFORM_DIRECTORIES = {
     "yv35-cl",
     "yv35-hd",
     "yv35-rf",
+    "sdy-cxlb",
 }
 
 # Sometimes titles include tags for the platform,

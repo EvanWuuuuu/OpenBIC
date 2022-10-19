@@ -1,12 +1,12 @@
-name: Build and Analyze 
+name: Build and Analyze
 
 on:
   pull_request:   # Kick off this on every PR
   workflow_call:  # We may want to run this workflow from other places, like nightly builds
     inputs:
       nightly:
-        required: false 
-        type: boolean 
+        required: false
+        type: boolean
         default: false
     secrets:
       GIST_SECRET:
@@ -25,10 +25,11 @@ jobs:
           wc-mb,
           yv3-dl,
           yv3-vf,
-          yv35-bb, 
-          yv35-cl, 
+          yv35-bb,
+          yv35-cl,
           yv35-hd,
           yv35-rf,
+          sdy-cxlb,
         ]
         # Need to set this to false otherwise it will cancel all platform builds if one fails.
       fail-fast: false
@@ -36,8 +37,8 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       with:
-        path: ${{ github.event.repository.name }} 
-    
+        path: ${{ github.event.repository.name }}
+
     - name: Install Dependencies
       run: |
         sudo apt-get update
@@ -51,16 +52,16 @@ jobs:
         gcc-multilib \
         g++-multilib \
         libsdl2-dev \
-  
+
     - name: Setup Python
       uses: actions/setup-python@v2
 
-    # Exactly what it says on the tin.    
+    # Exactly what it says on the tin.
     - name: Install requirements
       run: |
         pip install --user -U west
         pip install pyelftools
-        
+
     - name: Init West Project
       run: |
         west init --local ${{ github.event.repository.name }}
@@ -74,7 +75,7 @@ jobs:
           ./modules
           ./zephyr
         key: west-yml-${{ hashFiles('OpenBIC/west.yml') }}
- 
+
     - name: Cache SDK Toolchain
       id: cache-sdk
       uses: actions/cache@v2
@@ -87,9 +88,9 @@ jobs:
       id: download-sdk
       run: |
         wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.12.4/zephyr-sdk-0.12.4-x86_64-linux-setup.run
-        
+
         chmod +x zephyr-sdk-0.12.4-x86_64-linux-setup.run
-        
+
         ./zephyr-sdk-0.12.4-x86_64-linux-setup.run --quiet -- -d /home/runner/zephyr-sdk-0.12.4
 
         export ZEPHYR_TOOLCHAIN_VARIANT=zephyr
@@ -97,18 +98,18 @@ jobs:
 
     - name: Update West Project
       run: |
-        cd OpenBIC 
+        cd OpenBIC
         west update
- 
+
     - name: Apply Kernel Patches
       run: |
         ${{ github.event.repository.name }}/scripts/build/apply_patches.py --source="${{ github.event.repository.name }}/fix_patch/" --destination="zephyr"
- 
+
     - name: Build Platform
       id: build
       continue-on-error: true
       run: |
-        cd ${{ github.event.repository.name }} 
+        cd ${{ github.event.repository.name }}
         touch meta-facebook/${{ matrix.platform }}/CMakeLists.txt
         west build -p auto -b ast1030_evb meta-facebook/${{ matrix.platform }}/
 
@@ -133,14 +134,14 @@ jobs:
       uses: schneegans/dynamic-badges-action@v1.4.0
       with:
         auth: ${{ secrets.GIST_SECRET }}
-        gistID: 62fb115c4fa43a02acad226534e10932 
-        filename: ${{ matrix.platform }}.json 
+        gistID: 62fb115c4fa43a02acad226534e10932
+        filename: ${{ matrix.platform }}.json
         label: Build
         message: ${{ env.badge_message }}
         color: ${{ env.badge_color }}
 
     - name: Check Build Failure
-      if: ${{ env.build_return_code != '0' }} 
+      if: ${{ env.build_return_code != '0' }}
       run : |
           exit 1
 
@@ -149,18 +150,18 @@ jobs:
     if: ${{ inputs.nightly == false }}
     steps:
 
-    - name: Get PR File List 
+    - name: Get PR File List
       shell: bash
       run: |
         URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files"
         curl -s -X GET -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" $URL | jq -r '.[] | .filename' > git_diff.log
-        cat git_diff.log 
-  
+        cat git_diff.log
+
     - name: Check for C/CPP Sources
       shell: bash
       run : |
         CPP_FILE_LIST="/tmp/cppcheck_file_list.log"
-        
+
         # Only keep the source files to check or CPPCheck gets confused.
         sed '/\(\.c$\|\.cpp$\|\.c$\|\.cc$\|\.cu$\|\.cxx$\|\.h$\|\.hh$\|\.hpp$\|\.hxx$\|\.tcc$\)/!d' git_diff.log > $CPP_FILE_LIST
 
@@ -168,7 +169,7 @@ jobs:
           echo "C/C++ source files kept:"
           cat $CPP_FILE_LIST
         fi
-        
+
         if [ -s $CPP_FILE_LIST ]; then
           echo "contains_c_source=true" >> $GITHUB_ENV
         else
@@ -178,7 +179,7 @@ jobs:
     - uses: actions/checkout@v2
       name: Checkout Repo
       if: env.contains_c_source == 'true'
-        
+
     - uses: actions/setup-python@v2
       name: Setup Python
       if: env.contains_c_source == 'true'
@@ -211,7 +212,7 @@ jobs:
           "--report-progress")
 
         cppcheck "${options[@]}"
-        
+
         if [ -s /tmp/cppcheck.log ]; then
           echo "Errors Found:"
           cat /tmp/cppcheck.log
@@ -236,22 +237,22 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.nightly == false }}
     steps:
-      
+
     - uses: actions/checkout@v2
       name: Checkout Repo
 
-    - name: Get PR File List 
+    - name: Get PR File List
       shell: bash
       run: |
         URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files"
         curl -s -X GET -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" $URL | jq -r '.[] | .filename' > /tmp/change_set.log
-        cat /tmp/change_set.log 
+        cat /tmp/change_set.log
 
     - name: Check for C/CPP Sources
       shell: bash
       run : |
         CLANG_FORMAT_FILE_LIST="/tmp/clang_format_file_list.log"
-        
+
         # Only keep the source files to check or clang-format starts checking everything.
         sed '/\(\.c$\|\.cpp$\|\.c$\|\.cc$\|\.cu$\|\.cxx$\|\.h$\|\.hh$\|\.hpp$\|\.hxx$\|\.tcc$\)/!d' /tmp/change_set.log > $CLANG_FORMAT_FILE_LIST
 
@@ -259,7 +260,7 @@ jobs:
           echo "C/C++ source files kept for clang-format:"
           cat $CLANG_FORMAT_FILE_LIST
         fi
-        
+
         if [ -s $CLANG_FORMAT_FILE_LIST ]; then
           echo "contains_c_source=true" >> $GITHUB_ENV
           echo "contains_clang_errors=false" >> $GITHUB_ENV
@@ -267,9 +268,9 @@ jobs:
           echo "contains_c_source=false" >> $GITHUB_ENV
         fi
 
-    - name: Install Clang-Format 
+    - name: Install Clang-Format
       if: env.contains_c_source == 'true'
-      run: sudo apt-get install -y clang-format 
+      run: sudo apt-get install -y clang-format
 
     - name: Run clang-format on changed fileset.
       if: env.contains_c_source == 'true'
@@ -277,18 +278,18 @@ jobs:
       shell: bash
       run: |
         echo "Files to check:"
-        cat /tmp/clang_format_file_list.log 
-        
+        cat /tmp/clang_format_file_list.log
+
         FILE_PATHS=$(cat /tmp/clang_format_file_list.log)
         for FILE_PATH in $FILE_PATHS
         do
-          
-          options=( 
+
+          options=(
             "--style=file"
             "--dry-run"
             "--Werror")
-         
-          # Clang format outputs to stderr... why do you do this clang-format 
+
+          # Clang format outputs to stderr... why do you do this clang-format
           if ! clang-format "${options[@]}" $FILE_PATH &> /dev/null ; then
             echo -e "\u001b[31;1m$FILE_PATH has clang-format errors!\u001b[0m"
             echo $FILE_PATH >> /tmp/clang-format.log
@@ -296,7 +297,7 @@ jobs:
           fi
 
         done
- 
+
     - name: Check for clang-format output
       if: env.contains_c_source == 'true' && env.contains_clang_errors == 'true'
       run : |
@@ -309,15 +310,15 @@ jobs:
     if: ${{ always()  && inputs.nightly == false }}
     runs-on: ubuntu-latest
     steps:
-      
+
     - uses: actions/checkout@v2
       name: Checkout Repo
-     
+
     - uses: reviewdog/action-setup@v1
       with:
-        reviewdog_version: latest 
+        reviewdog_version: latest
 
-    - name: Download all artifacts 
+    - name: Download all artifacts
       uses: actions/download-artifact@v2
       with:
         path: /tmp/artifacts
